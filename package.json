@@ -1,0 +1,10 @@
+{
+  "name": "any-thumbnail",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "node-fetch": "^2.6.6",
+    "uuid": "^8.3.2",
+    "zx": "^4.2.0"
+  }
+}
