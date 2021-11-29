@@ -15,9 +15,14 @@ exports.lambdaHandler = async ({ body }, _context, callback) => {
 
   const tmpFilePath = path.join(tmpdir(), uuidv4());
 
-  await writeFile(tmpFilePath, await response.buffer());
-  await $`export HOME=/tmp && libreoffice7.1 --headless --convert-to png --outdir "${tmpdir()}" "${tmpFilePath}"`;
+  if (response.headers.get("content-type") === "application/pdf") {
+    await writeFile(`${tmpFilePath}.pdf`, await response.buffer());
+  } else {
+    await writeFile(tmpFilePath, await response.buffer());
+    await $`export HOME=/tmp && libreoffice7.1 --headless --convert-to pdf --outdir "${tmpdir()}" "${tmpFilePath}"`;
+  }
 
+  await $`pdftoppm -png -singlefile "${tmpFilePath}.pdf" "${tmpFilePath}"`;
   const pngBuffer = await readFile(`${tmpFilePath}.png`);
 
   callback(null, {
