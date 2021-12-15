@@ -7,27 +7,50 @@ const { $ } = require("zx");
 
 exports.lambdaHandler = async ({ body }, _context, callback) => {
   const { url } = JSON.parse(body);
-  const response = await fetch(url);
+  const response = await fetch(url, {
+    headers: {
+      "user-agent":
+        "any-thumbnail (+https://github.com/hata6502/any-thumbnail)",
+    },
+  });
+
+  await new Promise((resolve) => setTimeout(resolve, 3000));
 
   if (!response.ok) {
     throw new Error(`response is not ok. status: ${response.status}`);
   }
 
-  const tmpFilePath = path.join(tmpdir(), uuidv4());
+  const contentType = response.headers.get("content-type");
+  let imagePath;
 
-  if (response.headers.get("content-type") === "application/pdf") {
-    await writeFile(`${tmpFilePath}.pdf`, await response.buffer());
-  } else {
+  if (contentType.startsWith("image/")) {
+    const tmpFilePath = path.join(tmpdir(), uuidv4());
+
     await writeFile(tmpFilePath, await response.buffer());
-    await $`export HOME=/tmp && libreoffice7.1 --headless --convert-to pdf --outdir "${tmpdir()}" "${tmpFilePath}"`;
+    imagePath = tmpFilePath;
+  } else {
+    const tmpFilePath = path.join(tmpdir(), uuidv4());
+
+    if (contentType === "application/pdf") {
+      await writeFile(`${tmpFilePath}.pdf`, await response.buffer());
+    } else {
+      await writeFile(tmpFilePath, await response.buffer());
+      await $`export HOME=/tmp && libreoffice7.1 --headless --convert-to pdf --outdir "${tmpdir()}" "${tmpFilePath}"`;
+    }
+
+    await $`pdftoppm -png -singlefile "${tmpFilePath}.pdf" "${tmpFilePath}"`;
+    imagePath = `${tmpFilePath}.png`;
   }
 
-  await $`pdftoppm -png -singlefile "${tmpFilePath}.pdf" "${tmpFilePath}"`;
-  const pngBuffer = await readFile(`${tmpFilePath}.png`);
+  const compressedImagePath = path.join(tmpdir(), `${uuidv4()}.jpg`);
+
+  await $`convert ${imagePath} -define jpeg:extent=2048kb ${compressedImagePath}`;
+
+  const compressedImageBuffer = await readFile(compressedImagePath);
 
   callback(null, {
-    body: pngBuffer.toString("base64"),
-    headers: { "Content-Type": "image/png" },
+    body: compressedImageBuffer.toString("base64"),
+    headers: { "Content-Type": "image/jpeg" },
     isBase64Encoded: true,
     statusCode: 200,
   });
